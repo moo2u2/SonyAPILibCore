@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2024
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonyAPILib", "SonyAPILib\SonyAPILib.csproj", "{07F0C902-957A-44B9-9820-C9792DB9F66C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SonyAPILibCore", "SonyAPILibCore\SonyAPILibCore.csproj", "{07F0C902-957A-44B9-9820-C9792DB9F66C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleExample", "ConsoleExample\ConsoleExample.csproj", "{37532BF4-57B8-4B96-87D5-1CB3088412CF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleExample", "ConsoleExample\ConsoleExample.csproj", "{37532BF4-57B8-4B96-87D5-1CB3088412CF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
