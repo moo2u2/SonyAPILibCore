@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SonyAPILib\SonyAPILibCore.csproj" />
+    <ProjectReference Include="..\SonyAPILibCore\SonyAPILibCore.csproj" />
   </ItemGroup>
 
 </Project>
