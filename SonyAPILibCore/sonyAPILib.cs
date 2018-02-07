@@ -15,6 +15,7 @@ using System.Xml.Serialization;
 using System.Threading;
 using System.Globalization;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace SonyAPILib
 {
@@ -653,7 +654,7 @@ namespace SonyAPILib
                 _Log.AddMessage("Creating HttpWebRequest to URL: " + Url, true);
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create(Url);
                 _Log.AddMessage("Sending the following parameter: " + Parameters.ToString(), true);
-                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(Parameters);
+                byte[] bytes = Encoding.UTF8.GetBytes(Parameters);
                 req.KeepAlive = true;
                 req.Method = "POST";
                 req.ContentType = "text/xml; charset=utf-8";
@@ -695,13 +696,13 @@ namespace SonyAPILib
                     req.Headers.Add("Accept-Encoding", "gzip");
                 }
                 _Log.AddMessage("Sending WebRequest", false);
-                System.IO.Stream os = req.GetRequestStream();
+                Stream os = req.GetRequestStream();
                 // Post data and close connection
                 os.Write(bytes, 0, bytes.Length);
                 _Log.AddMessage("Sending WebRequest Complete", false);
                 // build response object if any
                 _Log.AddMessage("Creating Web Request Response", false);
-                System.Net.HttpWebResponse resp = req.GetResponse() as HttpWebResponse;
+                HttpWebResponse resp = req.GetResponse() as HttpWebResponse;
                 Stream respData = resp.GetResponseStream();
                 StreamReader sr = new StreamReader(respData);
                 string response = sr.ReadToEnd();
@@ -4029,71 +4030,18 @@ namespace SonyAPILib
                 {
                     _Log.AddMessage("SendIrcc Command String: " + CommandString, false);
                     string response = "";
-                    StringBuilder body = new StringBuilder("<?xml version=\"1.0\"?>");
-                    body.Append("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">");
-                    body.Append("<s:Body>");
-                    body.Append("<u:X_SendIRCC xmlns:u=\"urn:schemas-sony-com:service:IRCC:1\">");
-                    body.Append("<IRCCCode>" + CommandString + "</IRCCCode>");
-                    body.Append("</u:X_SendIRCC>");
-                    body.Append("</s:Body>");
-                    body.Append("</s:Envelope>");
-                    _Log.AddMessage("Sending IRCC Command String: " + CommandString, true);
-                    string Url = Parent.Ircc.ControlUrl;
-                    string Parameters = body.ToString();
-                    _Log.AddMessage("Creating HttpWebRequest to URL: " + Url, true);
-                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(Url);
-                    _Log.AddMessage("Sending the following parameter: " + Parameters.ToString(), true);
-                    byte[] bytes = System.Text.Encoding.UTF8.GetBytes(Parameters);
-                    req.KeepAlive = true;
-                    req.Method = "POST";
-                    req.ContentType = "text/xml; charset=utf-8";
-                    req.ContentLength = bytes.Length;
-                    _Log.AddMessage("Setting Header Information: " + req.Host.ToString(), false);
-                    if (Parent.Port != 80)
-                    {
-                        req.Host = Parent.IPAddress + ":" + Parent.Port;
-                    }
-                    else
-                    {
-                        req.Host = Parent.IPAddress;
-                    }
-                    _Log.AddMessage("Header Host: " + req.Host.ToString(), false);
-                    req.UserAgent = "Dalvik/1.6.0 (Linux; u; Android 4.0.3; EVO Build/IML74K)";
-                    _Log.AddMessage("Setting Header User Agent: " + req.UserAgent, false);
-                    if (Parent.Actionlist.RegisterMode > 3)
-                    {
-                        _Log.AddMessage("Processing Auth Cookie", false);
-                        req.CookieContainer = new CookieContainer();
-                        List<SonyCookie> bal = JsonConvert.DeserializeObject<List<SonyCookie>>(Parent.Cookie);
-                        req.CookieContainer.Add(new Uri(@"http://" + Parent.IPAddress + bal[0].Path), new Cookie(bal[0].Name, bal[0].Value));
-                        _Log.AddMessage("Cookie Container Count: " + req.CookieContainer.Count.ToString(), false);
-                        _Log.AddMessage("Setting Header Cookie: auth=" + bal[0].Value, false);
-                    }
-                    else
-                    {
-                        _Log.AddMessage("Setting Header X-CERS-DEVICE-ID: TVSideView-" + Parent.ServerMacAddress, false);
-                        req.Headers.Add("X-CERS-DEVICE-ID", "TVSideView:" + Parent.ServerMacAddress);
-                    }
-                    req.Headers.Add("SOAPAction", "\"urn:schemas-sony-com:service:IRCC:1#X_SendIRCC\"");
-                    if (Parent.Actionlist.RegisterMode < 4)
-                    {
-                        req.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-                        req.Headers.Add("Accept-Encoding", "gzip, deflate");
-                    }
-                    else
-                    {
-                        req.Headers.Add("Accept-Encoding", "gzip");
-                    }
+                    byte[] bytes;
+                    HttpWebRequest req = BuildIRCCRequestBody(Parent, CommandString, out bytes);
                     _Log.AddMessage("Sending WebRequest", false);
                     try
                     {
-                        System.IO.Stream os = req.GetRequestStream();
+                        Stream os = req.GetRequestStream();
                         // Post data and close connection
                         os.Write(bytes, 0, bytes.Length);
                         _Log.AddMessage("Sending WebRequest Complete", false);
                         // build response object if any
                         _Log.AddMessage("Creating Web Request Response", false);
-                        System.Net.HttpWebResponse resp = req.GetResponse() as HttpWebResponse;
+                        HttpWebResponse resp = req.GetResponse() as HttpWebResponse;
                         Stream respData = resp.GetResponseStream();
                         StreamReader sr = new StreamReader(respData);
                         response = sr.ReadToEnd();
@@ -4128,6 +4076,125 @@ namespace SonyAPILib
                 }
                 _Log.AddMessage("Or, this device is not compatiable with this Service!", false);
                 return "Error";
+            }
+
+            /// <summary>
+            /// Executes the XSendIRCC action asynchronously.
+            /// </summary>
+            /// <param name="Parent">The Parent Device to use.</param>
+            /// <param name="CommandString">In value for the IRCCCode action parameter.</param>
+            public async Task<string> SendIRCCAsync(SonyDevice Parent, String CommandString)
+            {
+                if (Parent.Ircc.ControlUrl != null & Parent.Registered == true)
+                {
+                    _Log.AddMessage("Async SendIrcc Command String: " + CommandString, false);
+                    string response = "";
+                    byte[] bytes;
+                    HttpWebRequest req = BuildIRCCRequestBody(Parent, CommandString, out bytes);
+                    _Log.AddMessage("Sending WebRequest", false);
+                    try
+                    {
+                        Stream os = await req.GetRequestStreamAsync();
+                        // Post data and close connection
+                        os.Write(bytes, 0, bytes.Length);
+                        _Log.AddMessage("Sending WebRequest Complete", false);
+                        // build response object if any
+                        _Log.AddMessage("Creating Web Request Response", false);
+                        HttpWebResponse resp = await req.GetResponseAsync() as HttpWebResponse;
+                        Stream respData = resp.GetResponseStream();
+                        StreamReader sr = new StreamReader(respData);
+                        response = sr.ReadToEnd();
+                        _Log.AddMessage("Response returned: " + response, false);
+                        os.Close();
+                        sr.Close();
+                        respData.Close();
+                        if (response != "")
+                        {
+                            _Log.AddMessage("Command WAS sent Successfully", true);
+                            Thread.Sleep(1000);
+                        }
+                        else
+                        {
+                            _Log.AddMessage("Command was NOT sent successfully", true);
+                        }
+                        Parent.Ircc.LastChange = response;
+                    }
+                    catch
+                    {
+                        _Log.AddMessage("Error communicating with device", true);
+                    }
+                    return response;
+                }
+                if (Parent.Ircc.ControlUrl == null)
+                {
+                    _Log.AddMessage("ERROR: controlURL for IRCC Service is NULL", true);
+                }
+                else
+                {
+                    _Log.AddMessage("ERROR: Device Registration is FALSE", true);
+                }
+                _Log.AddMessage("Or, this device is not compatiable with this Service!", false);
+                return "Error";
+            }
+
+            private HttpWebRequest BuildIRCCRequestBody(SonyDevice Parent, string CommandString, out byte[] bytes)
+            {
+                StringBuilder body = new StringBuilder("<?xml version=\"1.0\"?>");
+                body.Append("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">");
+                body.Append("<s:Body>");
+                body.Append("<u:X_SendIRCC xmlns:u=\"urn:schemas-sony-com:service:IRCC:1\">");
+                body.Append("<IRCCCode>" + CommandString + "</IRCCCode>");
+                body.Append("</u:X_SendIRCC>");
+                body.Append("</s:Body>");
+                body.Append("</s:Envelope>");
+                _Log.AddMessage("Sending IRCC Command String: " + CommandString, true);
+                string Url = Parent.Ircc.ControlUrl;
+                string Parameters = body.ToString();
+                _Log.AddMessage("Creating HttpWebRequest to URL: " + Url, true);
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(Url);
+                _Log.AddMessage("Sending the following parameter: " + Parameters.ToString(), true);
+                bytes = Encoding.UTF8.GetBytes(Parameters);
+                req.KeepAlive = true;
+                req.Method = "POST";
+                req.ContentType = "text/xml; charset=utf-8";
+                req.ContentLength = bytes.Length;
+                _Log.AddMessage("Setting Header Information: " + req.Host.ToString(), false);
+                if (Parent.Port != 80)
+                {
+                    req.Host = Parent.IPAddress + ":" + Parent.Port;
+                }
+                else
+                {
+                    req.Host = Parent.IPAddress;
+                }
+                _Log.AddMessage("Header Host: " + req.Host.ToString(), false);
+                req.UserAgent = "Dalvik/1.6.0 (Linux; u; Android 4.0.3; EVO Build/IML74K)";
+                _Log.AddMessage("Setting Header User Agent: " + req.UserAgent, false);
+                if (Parent.Actionlist.RegisterMode > 3)
+                {
+                    _Log.AddMessage("Processing Auth Cookie", false);
+                    req.CookieContainer = new CookieContainer();
+                    List<SonyCookie> bal = JsonConvert.DeserializeObject<List<SonyCookie>>(Parent.Cookie);
+                    req.CookieContainer.Add(new Uri(@"http://" + Parent.IPAddress + bal[0].Path), new Cookie(bal[0].Name, bal[0].Value));
+                    _Log.AddMessage("Cookie Container Count: " + req.CookieContainer.Count.ToString(), false);
+                    _Log.AddMessage("Setting Header Cookie: auth=" + bal[0].Value, false);
+                }
+                else
+                {
+                    _Log.AddMessage("Setting Header X-CERS-DEVICE-ID: TVSideView-" + Parent.ServerMacAddress, false);
+                    req.Headers.Add("X-CERS-DEVICE-ID", "TVSideView:" + Parent.ServerMacAddress);
+                }
+                req.Headers.Add("SOAPAction", "\"urn:schemas-sony-com:service:IRCC:1#X_SendIRCC\"");
+                if (Parent.Actionlist.RegisterMode < 4)
+                {
+                    req.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+                    req.Headers.Add("Accept-Encoding", "gzip, deflate");
+                }
+                else
+                {
+                    req.Headers.Add("Accept-Encoding", "gzip");
+                }
+                return req;
             }
 
             #endregion
